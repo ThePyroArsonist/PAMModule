@@ -18,6 +18,7 @@ PAM_TARGET_FILES = [
 ]
 
 PAM_LINE = f"auth optional {MODULE_NAME}"
+COMMENT = "# Configures PAM Error Logging; variables configured in /etc/security/limits.conf"
 
 # =========================
 
@@ -83,27 +84,31 @@ def update_pam_file(pam_file):
     with open(pam_file, "r") as f:
         lines = f.readlines()
 
-    # Prevent duplicate insertion
+    # Prevent duplicate insertion (check module presence anywhere)
     if any(MODULE_NAME in line for line in lines):
         print(f"[=] Already present in {pam_file}")
         return
 
     backup_file(pam_file)
 
-    inserted = False
-    for i, line in enumerate(lines):
-        if line.strip().startswith("auth"):
-            lines.insert(i + 1, PAM_LINE + "\n")
-            inserted = True
-            break
+    # Ensure file ends cleanly with newline
+    if lines and not lines[-1].endswith("\n"):
+        lines[-1] += "\n"
 
-    if not inserted:
-        lines.append(PAM_LINE + "\n")
+    # Build PAM block
+    pam_block = [
+        "\n",
+        f"{COMMENT}\n",
+        f"auth optional {MODULE_NAME}\n"
+    ]
+
+    # Append at END of file
+    lines.extend(pam_block)
 
     with open(pam_file, "w") as f:
         f.writelines(lines)
 
-    print(f"[+] Updated {pam_file}")
+    print(f"[+] Appended PAM module block to {pam_file}")
 
 def cleanup():
     if os.path.exists(TMP_PATH):
