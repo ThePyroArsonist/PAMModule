@@ -27,13 +27,18 @@ def require_root():
         exit(1)
 
 def detect_lib_path():
-    if os.path.exists("/lib64/security"):
-        return "/lib64/security"
-    elif os.path.exists("/lib/security"):
-        return "/lib/security"
-    else:
-        print("[!] Could not find PAM module directory.")
-        exit(1)
+    paths = [
+        "/lib64/security",                        # Rocky / RHEL
+        "/lib/security",                          # Older Debian/Ubuntu
+        "/usr/lib/x86_64-linux-gnu/security",     # Ubuntu 22/24+
+    ]
+
+    for path in paths:
+        if os.path.exists(path):
+            return path
+
+    print("[!] Could not find PAM module directory.")
+    exit(1)
 
 def backup_file(path):
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
