@@ -11,11 +11,21 @@ mv pam_auth_monitor.so /lib/security/
 # or
 mv pam_auth_monitor.so /lib64/security/
 
+REQUIREMENTS:
+Ubuntu
+sudo apt-get install libpam0g-dev
+
+Rocky
+sudo dnf install pam-devel
 
 Compile PAM Module - pam_error_mod.c
 
-gcc -fPIC -shared -o pam_error_mod.so pam_error_mod.c -lpam
+gcc -fPIC -shared -o pam_error_mod.so pam_error_mod.c -lpam -Wno-format-security
 sudo mv pam_error_mod.so /lib/security/
+
+Add in PAM config:
+
+auth optional pam_error_mod.so
 
 
 VULNERABILITIEES
