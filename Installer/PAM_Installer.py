@@ -43,21 +43,34 @@ def backup_file(path):
     print(f"[+] Backup created: {backup_path}")
 
 def download_module():
+    # Check if the module already exists in Downloads
+    downloads_path = "/home/cyberrange/Downloads"
+    local_path = os.path.join(downloads_path, MODULE_NAME)
+    
+    if os.path.exists(local_path):
+        print(f"[+] Using existing file: {local_path}")
+        shutil.copy2(local_path, TMP_PATH)
+        return
+
+    # If the module doesn't exist in Downloads, download it
     print(f"[+] Downloading module from {DOWNLOAD_URL}")
     result = subprocess.run(
         ["curl", "-L", "-o", TMP_PATH, DOWNLOAD_URL],
         capture_output=True,
         text=True
     )
+    
     if result.returncode != 0:
         print("[!] Download failed:")
         print(result.stderr)
         exit(1)
+
     if not os.path.exists(TMP_PATH):
         print("[!] Downloaded file not found.")
         exit(1)
-    print(f"[+] Downloaded to {TMP_PATH}")
 
+    print(f"[+] Downloaded to {TMP_PATH}")
+    
 def install_module(lib_path):
     dest_path = os.path.join(lib_path, MODULE_NAME)
     shutil.copy2(TMP_PATH, dest_path)
