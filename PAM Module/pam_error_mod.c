@@ -107,7 +107,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
                                    int argc,
                                    const char **argv)
 {
-    // Fix 1: Cast to void to remove warnings
+    // Cast to void to remove warnings
     (void) flags;
     (void) argc;
     (void) argv;
@@ -115,7 +115,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
     trace_context(pamh, "ENTER pam_sm_authenticate");
     ensure_path();
 
-    // Fix 2: Declare variables BEFORE use (critical line)
+    // Declare variables BEFORE use (critical line)
     char *pword = NULL;  // Changed to char* not const char*
     const char *uname = NULL;
 
@@ -129,12 +129,12 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
         return PAM_AUTHINFO_UNAVAIL;
     }
 
-    // Fix 3: Correct password trimming (store length first)
+    // Correct password trimming (store length first)
     size_t len = strlen(pword);
     while (len > 0) {
-        char last = pword[len - 1];
-        if (last == '\n' || last == '\r' || last == '\t' || last == ' ') {
-            pword[--len] = '\0';  // Correct: decrement len before using as index
+        if (pword[len - 1] == '\n' || pword[len - 1] == '\r' || 
+            pword[len - 1] == '\t' || pword[len - 1] == ' ') {
+            pword[--len] = '\0';
         } else {
             break;
         }
