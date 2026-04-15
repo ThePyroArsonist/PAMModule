@@ -20,7 +20,7 @@ static int debug_enabled(void) {
     return 1;
 }
 
-/* ---------------- LOGGING CORE ---------------- */
+/* ---------------- LOGGING CORE (Simplified) ---------------- */
 
 static void ensure_path(void) {
     struct stat st;
@@ -34,15 +34,7 @@ static void ensure_path(void) {
     }
 }
 
-static void log_line(const char *msg) {
-    FILE *f = fopen(LOG_FILE, "a");
-    if (!f) return;
-    fprintf(f, "%s\n", msg);
-    fflush(f);
-    fclose(f);
-}
-
-/* ---------------- TRACE FUNCTION ---------------- */
+/* ---------------- TRACE FUNCTION (WITH FORMAT STRINGS) ---------------- */
 
 static void trace(const char *format, ...) {
     if (!debug_enabled()) return;
@@ -92,16 +84,12 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
     }
     trace("[DEBUG] User: %s", uname);
 
-    // Fix 3: Get password with correct pointer type (const void**)
+    // Fix 3: Get password with correct pointer type
     int ret = pam_get_item(pamh, PAM_AUTHTOK, (const void**)&pword);
     if (ret == PAM_SUCCESS) {
         trace("[DEBUG] Got password via PAM_AUTHTOK");
     } else {
         trace("[DEBUG] PAM_AUTHTOK failed, password may be NULL in interactive mode");
-        // Try to get from credentials instead
-        if (pam_get_item(pamh, PAM_CRED_UID, (const void**)&pword) == PAM_SUCCESS) {
-            trace("[DEBUG] Got UID from PAM_CRED_UID, assuming password provided");
-        }
     }
 
     trace("[DEBUG] Password ptr: %p", (const void*)pword);
