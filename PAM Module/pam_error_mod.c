@@ -43,7 +43,6 @@ static void log_line(const char *msg) {
     fclose(f);
 }
 
-/* ---------------- TRACE MACRO (FIXED: NOW ACCEPTS FORMAT STRINGS) ---------------- */
 static void trace(const char *format, ...) {
     if (!debug_enabled()) return;
     va_list args;
