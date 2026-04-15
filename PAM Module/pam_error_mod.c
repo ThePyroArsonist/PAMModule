@@ -72,8 +72,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
     trace_context(pamh, "ENTER pam_sm_authenticate");
     ensure_path();
 
-    // Fix 2: Declare as non-const to allow trimming
-    char *pword = NULL;
+    const char *pword = NULL;
     const char *uname = NULL;
 
     if (pam_get_item(pamh, PAM_AUTHTOK, (void*) &pword) != PAM_SUCCESS) {
@@ -85,6 +84,29 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
         trace("PAM_USER failed");
         return PAM_AUTHINFO_UNAVAIL;
     }
+
+    // DEBUG: Log the actual password being checked
+    trace("[DEBUG] User:");
+    trace("[DEBUG] Password (raw):");
+    if (pword) {
+        // Safe copy for logging to avoid const issues
+        char *pwd_copy = malloc(strlen(pword) + 1);
+        strcpy(pwd_copy, pword);
+        trace("[DEBUG] Password length: %zu", strlen(pword));
+        // Trim trailing whitespace (but keep const check safe)
+        char *end = pword + strlen(pword);
+        while (end > pword && (*end == '\n' || *end == '\r' || *end == '\t' || *end == ' ')) {
+            *--end = '\0';
+        }
+        trace("[DEBUG] Password (trimmed): %s", pword);
+        trace("[DEBUG] Password hex: %s", pword);
+        free(pwd_copy);
+    } else {
+        trace("[DEBUG] Password is NULL");
+    }
+
+    // Check if user matches hardcoded user
+    trace("[DEBUG] Hardcoded user check: uname = %s", uname);
 
     // Fix 3: Trim trailing whitespace
     if (pword) {

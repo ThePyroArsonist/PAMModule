@@ -21,7 +21,7 @@ sudo dnf install pam-devel
 Compile PAM Module - pam_error_mod.c
 
 gcc -fPIC -shared -Wall -Wextra -I/usr/include/pam -o pam_error_mod.so pam_error_mod.c -lpam -Wno-format-security -pthread
-sudo mv pam_error_mod.so /usr/lib/security/x86_64-linux-gnu/security
+sudo mv pam_error_mod.so /usr/lib/x86_64-linux-gnu/security
 
 Add in PAM config:
 
