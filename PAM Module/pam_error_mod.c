@@ -83,21 +83,29 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh,
     char *pword = NULL;
     const char *uname = NULL;
 
-    if (pam_get_item(pamh, PAM_AUTHTOK, (void*) &pword) != PAM_SUCCESS) {
-        trace("PAM_AUTHTOK failed");
-        return PAM_AUTHINFO_UNAVAIL;
+    char *pword = NULL;
+
+    // Try both PAM_AUTHTOK and PAM_TOK
+    int ret = pam_get_item(pamh, PAM_AUTHTOK, (void**)&pword);
+    if (ret == PAM_SUCCESS) {
+        trace("[DEBUG] Got password via PAM_AUTHTOK");
+    } else {
+        trace("[DEBUG] PAM_AUTHTOK failed, trying PAM_TOK");
+        ret = pam_get_item(pamh, PAM_TOK, (void**)&pword);
+        if (ret == PAM_SUCCESS) {
+            trace("[DEBUG] Got password via PAM_TOK");
+        } else {
+            trace("[DEBUG] Both failed, password may be NULL in interactive mode");
+        }
     }
 
-    if (pam_get_item(pamh, PAM_USER, (void*) &uname) != PAM_SUCCESS) {
-        trace("PAM_USER failed");
-        return PAM_AUTHINFO_UNAVAIL;
-    }
-
-    // DEBUG: Log what PAM is passing
-    trace("[DEBUG] User: %s", uname);
+    trace("[DEBUG] Password ptr: %p", (void*)pword);
     if (pword) {
-        trace("[DEBUG] Password (raw): %s", pword);
-        trace("[DEBUG] Password length: %zu", strlen(pword));
+        trace("[DEBUG] Password: %s", pword);
+    } else {
+        trace("[DEBUG] Password is NULL (interactive login without PAM_AUTHTOK)");
+    }
+
         
         // Trim trailing whitespace
         char *end = pword + strlen(pword);
